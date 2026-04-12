@@ -1,6 +1,6 @@
 # Skleník 🌱
 
-IoT projekt inteligentního skleníku postavený na kombinaci **ESP32 (ESPHome)** a **Raspberry Pi 4 (Home Assistant)**.  
+IoT projekt inteligentního skleníku postavený na kombinaci **ESP32 (ESPHome)** a **Raspberry Pi 5 (Home Assistant)**.  
 Systém sbírá data ze senzorů a automaticky řídí zavlažování, větrání a osvětlení.
 
 ---
