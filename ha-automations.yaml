@@ -1,0 +1,78 @@
+automation:
+  - id: sklenik_svetlo_zapnout_zapad
+    alias: "Sklenik - zapnout svetlo pri zapadu slunce"
+    trigger:
+      - platform: sun
+        event: sunset
+        offset: "00:00:00"
+    condition:
+      - condition: state
+        entity_id: switch.esp_sklenik_svetlo
+        state: "off"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.esp_sklenik_svetlo
+
+  - id: sklenik_svetlo_vypnout_vychod
+    alias: "Sklenik - vypnout svetlo pri vychodu slunce"
+    trigger:
+      - platform: sun
+        event: sunrise
+        offset: "00:00:00"
+    condition:
+      - condition: state
+        entity_id: switch.esp_sklenik_svetlo
+        state: "on"
+    action:
+      - service: switch.turn_off
+        target:
+          entity_id: switch.esp_sklenik_svetlo
+
+  - id: sklenik_svetlo_vypnout_pulnoc
+    alias: "Sklenik - vypnout svetlo v pulnoc (pojistka)"
+    trigger:
+      - platform: time
+        at: "00:00:00"
+    condition:
+      - condition: state
+        entity_id: switch.esp_sklenik_svetlo
+        state: "on"
+    action:
+      - service: switch.turn_off
+        target:
+          entity_id: switch.esp_sklenik_svetlo
+
+  - id: sklenik_cerpadlo_nizka_voda_vypnout
+    alias: "Sklenik - vypnout cerpadlo pri nizke hladine vody"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.esp_sklenik_hladina_vody
+        to: "off"
+    condition:
+      - condition: state
+        entity_id: switch.esp_sklenik_cerpadlo
+        state: "on"
+    action:
+      - service: switch.turn_off
+        target:
+          entity_id: switch.esp_sklenik_cerpadlo
+      - service: notify.persistent_notification
+        data:
+          title: "Sklenik - nizka hladina vody"
+          message: "Hladina vody v nadrzi je nizka. Cerpadlo bylo vypnuto."
+
+  - id: sklenik_okno_zavrit_dest
+    alias: "Sklenik - zavrit okno pri desti"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.esp_sklenik_teplota
+        below: 15
+    condition:
+      - condition: state
+        entity_id: switch.esp_sklenik_okno
+        state: "on"
+    action:
+      - service: switch.turn_off
+        target:
+          entity_id: switch.esp_sklenik_okno
