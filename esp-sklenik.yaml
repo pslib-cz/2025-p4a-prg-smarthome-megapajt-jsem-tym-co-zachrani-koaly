@@ -1,0 +1,201 @@
+esphome:
+  name: esp-sklenik
+  friendly_name: ESP-sklenik
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+
+one_wire:
+  - platform: gpio
+    pin: GPIO1
+
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+
+sensor:
+  - platform: dallas_temp
+    name: "Teplota"
+    id: temperature
+    address: 0x0406259137f2b928
+    update_interval: 5s
+
+  - platform: adc
+    pin: GPIO4
+    name: "Vlhkost pudy 1"
+    id: vlhkost_pudy1
+    update_interval: 5s
+    attenuation: 12db
+    filters:
+      - lambda: |-
+          float dry = 2.70;
+          float wet = 1.40;
+          float pct = (dry - x) / (dry - wet) * 100.0;
+          if (pct < 0) return 0.0;
+          if (pct > 100) return 100.0;
+          return pct;
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+
+  - platform: adc
+    pin: GPIO5
+    name: "Vlhkost pudy 2"
+    id: vlhkost_pudy2
+    update_interval: 5s
+    attenuation: 12db
+    filters:
+      - lambda: |-
+          float dry = 2.70;
+          float wet = 1.40;
+          float pct = (dry - x) / (dry - wet) * 100.0;
+          if (pct < 0) return 0.0;
+          if (pct > 100) return 100.0;
+          return pct;
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+
+  - platform: adc
+    pin: GPIO6
+    name: "Vlhkost pudy 3"
+    id: vlhkost_pudy3
+    update_interval: 5s
+    attenuation: 12db
+    filters:
+      - lambda: |-
+          float dry = 2.70;
+          float wet = 1.40;
+          float pct = (dry - x) / (dry - wet) * 100.0;
+          if (pct < 0) return 0.0;
+          if (pct > 100) return 100.0;
+          return pct;
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+
+  - platform: adc
+    pin: GPIO7
+    name: "Vlhkost pudy 4"
+    id: vlhkost_pudy4
+    update_interval: 5s
+    attenuation: 12db
+    filters:
+      - lambda: |-
+          float dry = 2.70;
+          float wet = 1.40;
+          float pct = (dry - x) / (dry - wet) * 100.0;
+          if (pct < 0) return 0.0;
+          if (pct > 100) return 100.0;
+          return pct;
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+
+  - platform: template
+    name: "Prumerna vlhkost pudy"
+    id: avg_humidity
+    lambda: |-
+      return (id(vlhkost_pudy1).state + id(vlhkost_pudy2).state +
+              id(vlhkost_pudy3).state + id(vlhkost_pudy4).state) / 4.0;
+    update_interval: 10s
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+
+binary_sensor:
+  - platform: gpio
+    name: "Hladina vody"
+    id: hladina_vody
+    pin:
+      number: GPIO15
+      mode:
+        input: true
+        pullup: true
+      inverted: false
+    device_class: moisture
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+
+switch:
+  - platform: gpio
+    name: "Okno"
+    id: okno
+    pin: GPIO16
+    restore_mode: RESTORE_DEFAULT_OFF
+
+  - platform: gpio
+    name: "Cerpadlo"
+    id: cerpadlo
+    pin: GPIO17
+    restore_mode: RESTORE_DEFAULT_OFF
+
+  - platform: gpio
+    name: "Svetlo"
+    id: svetlo
+    pin: GPIO18
+    restore_mode: RESTORE_DEFAULT_OFF
+
+display:
+  - platform: lcd_pcf8574
+    dimensions: 16x2
+    address: 0x3F
+    update_interval: 2s
+    lambda: |-
+      if (isnan(id(temperature).state)) {
+        it.print(0, 0, "Teplota: --.-C");
+      } else {
+        it.printf(0, 0, "Teplota: %.1fC", id(temperature).state);
+      }
+      it.printf(0, 1, "V:%.0f%% %s %s %s",
+        id(avg_humidity).state,
+        id(okno).state ? "OKN" : "---",
+        id(cerpadlo).state ? "CRP" : "---",
+        id(svetlo).state ? "SVT" : "---"
+      );
+
+interval:
+  - interval: 30s
+    then:
+      - lambda: |-
+          float temp = id(temperature).state;
+          float hum = id(avg_humidity).state;
+          bool water_ok = id(hladina_vody).state;
+
+          if (!isnan(temp)) {
+            if (temp > 28.0 && !id(okno).state) {
+              id(okno).turn_on();
+            } else if (temp < 23.0 && id(okno).state) {
+              id(okno).turn_off();
+            }
+          }
+
+          if (!isnan(hum)) {
+            if (hum < 40.0 && water_ok && !id(cerpadlo).state) {
+              id(cerpadlo).turn_on();
+            } else if ((hum >= 65.0 || !water_ok) && id(cerpadlo).state) {
+              id(cerpadlo).turn_off();
+            }
+          }
+
+          if (!water_ok && id(cerpadlo).state) {
+            id(cerpadlo).turn_off();
+          }
+
+api:
+  encryption:
+    key: "Cn1RQ8BLyV2sqBciRIdv0uijcH52ZL7TZWCeX+sqwVs="
+
+ota:
+  - platform: esphome
+    password: "c430ce5d59c87b0408f9ae71546190ee"
+
+wifi:
+  ssid: "U Jardika"
+  password: "JoeBlack55"
+  ap:
+    ssid: "Esp-Sklenik Fallback Hotspot"
+    password: "mPc3rYytdbQY"
+
+captive_portal:
