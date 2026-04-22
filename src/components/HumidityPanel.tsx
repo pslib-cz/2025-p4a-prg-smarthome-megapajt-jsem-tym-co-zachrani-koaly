@@ -1,193 +1,180 @@
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { useAnimatedValue } from "../hooks/useAnimatedValue"
-import { clamp } from "../utils/format"
-import { Card } from "./Card"
+import { useId } from "react";
+import { motion } from "framer-motion";
+import { useAnimatedValue } from "../hooks/useAnimatedValue";
+import { clamp } from "../utils/format";
+import { Card } from "./Card";
 
 interface HumidityPanelProps {
-  humidity: [number, number, number, number]
-  delay?: number
+    humidity: number;
+    delay?: number;
 }
-
-const SENSOR_LABELS = ["Sever", "Vychod", "Jih", "Zapad"] as const
 
 function humidityColor(value: number): string {
-  if (value >= 60) return "#22c55e"
-  if (value >= 40) return "#f97316"
-  return "#ef4444"
+    if (value >= 60) return "#22c55e";
+    if (value >= 40) return "#f97316";
+    return "#ef4444";
 }
 
-const RADAR_CX = 80
-const RADAR_CY = 80
-const RADAR_RADIUS = 60
-
-function radarPoint(index: number, value: number): { x: number; y: number } {
-  const angle = (index / 4) * 2 * Math.PI - Math.PI / 2
-  const r = (value / 100) * RADAR_RADIUS
-  return { x: RADAR_CX + r * Math.cos(angle), y: RADAR_CY + r * Math.sin(angle) }
+function humidityStatus(value: number): string {
+    if (value >= 60) return "Optimalni";
+    if (value >= 40) return "Sucho";
+    return "Kriticke sucho";
 }
 
-function radarAxisPoint(index: number): { x: number; y: number } {
-  const angle = (index / 4) * 2 * Math.PI - Math.PI / 2
-  return { x: RADAR_CX + RADAR_RADIUS * Math.cos(angle), y: RADAR_CY + RADAR_RADIUS * Math.sin(angle) }
+const ARC_START_DEG = 135;
+const ARC_END_DEG = 405;
+const ARC_RANGE_DEG = ARC_END_DEG - ARC_START_DEG;
+const RADIUS = 90;
+const CX = 110;
+const CY = 110;
+
+function degToRad(deg: number) {
+    return (deg * Math.PI) / 180;
 }
 
-interface AnimatedBarProps {
-  label: string
-  value: number
-  highlighted: boolean
-  onHover: (active: boolean) => void
+function pointOnArc(deg: number) {
+    const rad = degToRad(deg);
+    return { x: CX + RADIUS * Math.cos(rad), y: CY + RADIUS * Math.sin(rad) };
 }
 
-const AnimatedBar = ({ label, value, highlighted, onHover }: AnimatedBarProps) => {
-  const animated = useAnimatedValue(clamp(value, 0, 100), 1200)
-  const color = humidityColor(animated)
-
-  return (
-    <div
-      className="group cursor-default"
-      onMouseEnter={() => onHover(true)}
-      onMouseLeave={() => onHover(false)}
-    >
-      <div className="flex justify-between items-center mb-1">
-        <span
-          className="font-mono text-xs tracking-[0.15em] uppercase transition-colors duration-200"
-          style={{ color: highlighted ? color : "#6b7e6b" }}
-        >
-          {label}
-        </span>
-        <span className="font-mono text-xs font-bold" style={{ color }}>
-          {Math.round(animated)}%
-        </span>
-      </div>
-      <div className="h-1.5 rounded-full bg-surface-elevated overflow-hidden">
-        <motion.div
-          className="h-full rounded-full"
-          style={{ backgroundColor: color }}
-          animate={{ width: `${animated}%` }}
-          transition={{ duration: 1.2, ease: "easeOut" }}
-        />
-      </div>
-    </div>
-  )
+function arcPath(startDeg: number, endDeg: number, r: number) {
+    const s = pointOnArc(startDeg);
+    const e = {
+        x: CX + r * Math.cos(degToRad(endDeg)),
+        y: CY + r * Math.sin(degToRad(endDeg)),
+    };
+    const largeArc = endDeg - startDeg > 180 ? 1 : 0;
+    return `M ${s.x} ${s.y} A ${r} ${r} 0 ${largeArc} 1 ${e.x} ${e.y}`;
 }
+
+const TICKS = [0, 20, 40, 60, 80, 100];
 
 export const HumidityPanel = ({ humidity, delay = 0 }: HumidityPanelProps) => {
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+    const gradientId = useId();
+    const animated = useAnimatedValue(clamp(humidity, 0, 100), 1000);
+    const color = humidityColor(animated);
+    const status = humidityStatus(animated);
 
-  const average = Math.round(humidity.reduce((a, b) => a + b, 0) / 4)
-  const avgColor = humidityColor(average)
+    const normalized = animated / 100;
+    const needleDeg = ARC_START_DEG + normalized * ARC_RANGE_DEG;
+    const needlePoint = pointOnArc(needleDeg);
 
-  const points = humidity.map((v, i) => radarPoint(i, v))
-  const polygonPoints = points.map((p) => `${p.x},${p.y}`).join(" ")
+    const optimalStartDeg = ARC_START_DEG + (60 / 100) * ARC_RANGE_DEG;
+    const optimalEndDeg = ARC_START_DEG + (100 / 100) * ARC_RANGE_DEG;
 
-  const gridLevels = [25, 50, 75, 100]
+    return (
+        <Card delay={delay} className="flex flex-col items-center gap-2 h-full">
+            <span className="font-sans text-xs font-semibold tracking-[0.2em] uppercase text-text-secondary">
+                Vlhkost pudy
+            </span>
 
-  return (
-    <Card delay={delay} className="flex flex-col gap-4 h-full">
-      <span className="font-sans text-xs font-semibold tracking-[0.2em] uppercase text-text-secondary">
-        Vlhkost pudy
-      </span>
+            <svg
+                width={220}
+                height={180}
+                viewBox="0 0 220 180"
+                aria-label={`Vlhkost: ${Math.round(animated)}%`}
+            >
+                <defs>
+                    <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#ef4444" />
+                        <stop offset="40%" stopColor="#f97316" />
+                        <stop offset="60%" stopColor="#22c55e" />
+                        <stop offset="100%" stopColor="#22c55e" />
+                    </linearGradient>
+                </defs>
 
-      <div className="flex flex-col gap-3">
-        {SENSOR_LABELS.map((label, i) => (
-          <AnimatedBar
-            key={label}
-            label={label}
-            value={humidity[i]}
-            highlighted={hoveredIndex === i}
-            onHover={(active) => setHoveredIndex(active ? i : null)}
-          />
-        ))}
-      </div>
+                <path
+                    d={arcPath(ARC_START_DEG, ARC_END_DEG, RADIUS)}
+                    fill="none"
+                    stroke="#1a2e1a"
+                    strokeWidth={10}
+                    strokeLinecap="round"
+                />
 
-      <div className="flex items-center gap-6 mt-auto pt-4 border-t border-border">
-        <svg width={160} height={160} viewBox="0 0 160 160">
-          {gridLevels.map((level) => {
-            const r = (level / 100) * RADAR_RADIUS
-            const gPoints = [0, 1, 2, 3].map((i) => {
-              const angle = (i / 4) * 2 * Math.PI - Math.PI / 2
-              return `${RADAR_CX + r * Math.cos(angle)},${RADAR_CY + r * Math.sin(angle)}`
-            }).join(" ")
-            return (
-              <polygon
-                key={level}
-                points={gPoints}
-                fill="none"
-                stroke="#1a2e1a"
-                strokeWidth={1}
-              />
-            )
-          })}
+                <path
+                    d={arcPath(optimalStartDeg, optimalEndDeg, RADIUS)}
+                    fill="none"
+                    stroke="#22c55e33"
+                    strokeWidth={14}
+                    strokeLinecap="round"
+                />
 
-          {[0, 1, 2, 3].map((i) => {
-            const axisEnd = radarAxisPoint(i)
-            return (
-              <line
-                key={i}
-                x1={RADAR_CX}
-                y1={RADAR_CY}
-                x2={axisEnd.x}
-                y2={axisEnd.y}
-                stroke="#1a2e1a"
-                strokeWidth={1}
-              />
-            )
-          })}
+                <motion.path
+                    d={arcPath(ARC_START_DEG, needleDeg, RADIUS)}
+                    fill="none"
+                    stroke={`url(#${gradientId})`}
+                    strokeWidth={10}
+                    strokeLinecap="round"
+                    initial={false}
+                    animate={{ d: arcPath(ARC_START_DEG, needleDeg, RADIUS) }}
+                    transition={{ duration: 1, ease: "easeOut" }}
+                />
 
-          <motion.polygon
-            points={polygonPoints}
-            fill="#22c55e22"
-            stroke="#22c55e"
-            strokeWidth={1.5}
-            animate={{ points: polygonPoints }}
-            transition={{ duration: 1, ease: "easeInOut" }}
-          />
+                {TICKS.map((tick) => {
+                    const deg = ARC_START_DEG + (tick / 100) * ARC_RANGE_DEG;
+                    const outer = pointOnArc(deg);
+                    const innerR = RADIUS - 14;
+                    const inner = {
+                        x: CX + innerR * Math.cos(degToRad(deg)),
+                        y: CY + innerR * Math.sin(degToRad(deg)),
+                    };
+                    const labelR = RADIUS + 14;
+                    const label = {
+                        x: CX + labelR * Math.cos(degToRad(deg)),
+                        y: CY + labelR * Math.sin(degToRad(deg)),
+                    };
+                    return (
+                        <g key={tick}>
+                            <line
+                                x1={inner.x}
+                                y1={inner.y}
+                                x2={outer.x}
+                                y2={outer.y}
+                                stroke="#6b7e6b"
+                                strokeWidth={1}
+                            />
+                            <text
+                                x={label.x}
+                                y={label.y}
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                fill="#6b7e6b"
+                                fontFamily="JetBrains Mono, monospace"
+                                fontSize={8}
+                            >
+                                {tick}
+                            </text>
+                        </g>
+                    );
+                })}
 
-          {points.map((p, i) => (
-            <motion.circle
-              key={i}
-              cx={p.x}
-              cy={p.y}
-              r={hoveredIndex === i ? 5 : 3}
-              fill={humidityColor(humidity[i])}
-              animate={{ cx: p.x, cy: p.y, r: hoveredIndex === i ? 5 : 3 }}
-              transition={{ duration: 1, ease: "easeInOut" }}
-              style={{ filter: hoveredIndex === i ? `drop-shadow(0 0 4px ${humidityColor(humidity[i])})` : "none" }}
-            />
-          ))}
+                <motion.circle
+                    cx={needlePoint.x}
+                    cy={needlePoint.y}
+                    r={5}
+                    fill={color}
+                    animate={{ cx: needlePoint.x, cy: needlePoint.y }}
+                    transition={{ duration: 1, ease: "easeOut" }}
+                    style={{ filter: `drop-shadow(0 0 6px ${color})` }}
+                />
+            </svg>
 
-          {[0, 1, 2, 3].map((i) => {
-            const axisEnd = radarAxisPoint(i)
-            const labelOffset = 14
-            const angle = (i / 4) * 2 * Math.PI - Math.PI / 2
-            return (
-              <text
-                key={i}
-                x={RADAR_CX + (RADAR_RADIUS + labelOffset) * Math.cos(angle)}
-                y={RADAR_CY + (RADAR_RADIUS + labelOffset) * Math.sin(angle)}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fill={hoveredIndex === i ? humidityColor(humidity[i]) : "#6b7e6b"}
-                fontFamily="Space Grotesk, sans-serif"
-                fontWeight="600"
-                fontSize={9}
-                style={{ transition: "fill 200ms" }}
-              >
-                {SENSOR_LABELS[i][0]}
-              </text>
-            )
-          })}
-        </svg>
+            <span className="font-mono text-4xl font-bold" style={{ color }}>
+                {Math.round(animated)}
+                <span
+                    className="text-lg ml-0.5 font-normal"
+                    style={{ color: color + "99" }}
+                >
+                    %
+                </span>
+            </span>
 
-        <div className="flex flex-col gap-1">
-          <span className="font-mono text-xs text-text-secondary tracking-[0.12em] uppercase">Prumer</span>
-          <span className="font-mono text-3xl font-bold" style={{ color: avgColor }}>
-            {average}
-            <span className="text-base ml-0.5 font-normal" style={{ color: avgColor + "99" }}>%</span>
-          </span>
-        </div>
-      </div>
-    </Card>
-  )
-}
+            <span
+                className="font-mono text-xs tracking-[0.15em] uppercase"
+                style={{ color: color + "cc" }}
+            >
+                {status}
+            </span>
+        </Card>
+    );
+};
